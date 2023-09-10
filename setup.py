@@ -1,12 +1,10 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
-with open('requirements.txt', 'r') as requirements:
-    setup(
-        name='mi_experiments',
-        version='0.1',
-        packages=find_packages(),
-        description='',
-        python_requires='>=3.8',
-        author="Oscar Balcells",
-        install_requires=list(requirements.read().splitlines()),
-    )
+setup(
+    name="miexp",
+    packages=find_packages(),
+    version="1.0.0",
+    description="A short description of the project",
+    author="Oskar Balcells",
+    license="MIT"
+)
