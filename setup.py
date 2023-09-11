@@ -1,10 +1,10 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="miexp",
+    name="miexperiments",
     packages=find_packages(),
     version="1.0.0",
-    description="A short description of the project",
+    description="Mechanistic Interpretbility Experiments",
     author="Oskar Balcells",
     license="MIT"
 )
