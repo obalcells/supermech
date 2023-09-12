@@ -4,3 +4,4 @@ temp/
 .egg-info/
 .DS_Store
 .html
+miexperiments/models

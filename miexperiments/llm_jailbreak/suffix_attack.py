@@ -1,12 +1,16 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import Tensor
 from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaForCausalLM, GPTNeoXForCausalLM
-from fastchat.conversation import get_conv_template
+from fastchat.conversation import Conversation, get_conv_template
 from livelossplot import PlotLosses
+from typing import Tuple, List, Optional, Dict
+from jaxtyping import Float, Int
 
 device = "mps"
-model = "pythia"
+non_mps_device = "cpu"
+model_name = "pythia"
 auth_token = ""
 precision = torch.float32
 
@@ -16,7 +20,7 @@ precision = torch.float32
 
 
 class SuffixManager:
-    def __init__(self, *, tokenizer, conv_template, instruction, target, adv_string):
+    def __init__(self, *, tokenizer, conv_template: Conversation, instruction: str, target: str, adv_string: List[int]):
 
         self.tokenizer = tokenizer
         self.conv_template = conv_template
@@ -61,41 +65,34 @@ class SuffixManager:
             self._target_slice = slice(self._assistant_role_slice.stop, len(toks)-2)
             self._loss_slice = slice(self._assistant_role_slice.stop-1, len(toks)-3)
 
+        elif self.conv_template.name == 'oasst_pythia':
+            # This is specific to the vicuna and pythia tokenizer and conversation prompt.
+            # It will not work with other tokenizers or prompts.
+            self.conv_template.messages = []
+
+            self.conv_template.append_message(self.conv_template.roles[0], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._user_role_slice = slice(None, len(toks))
+
+            self.conv_template.update_last_message(f"{self.instruction}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._goal_slice = slice(self._user_role_slice.stop, max(self._user_role_slice.stop, len(toks)-1))
+
+            separator = ' ' if self.instruction else ''
+            self.conv_template.update_last_message(f"{self.instruction}{separator}{self.adv_string}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._control_slice = slice(self._goal_slice.stop, len(toks)-1)
+
+            self.conv_template.append_message(self.conv_template.roles[1], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._assistant_role_slice = slice(self._control_slice.stop, len(toks))
+
+            self.conv_template.update_last_message(f"{self.target}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._target_slice = slice(self._assistant_role_slice.stop, len(toks)-1)
+            self._loss_slice = slice(self._assistant_role_slice.stop-1, len(toks)-2)
         else:
-            python_tokenizer = False or self.conv_template.name == 'oasst_pythia'
-            try:
-                encoding.char_to_token(len(prompt)-1)
-            except:
-                python_tokenizer = True
-
-            if python_tokenizer:
-                # This is specific to the vicuna and pythia tokenizer and conversation prompt.
-                # It will not work with other tokenizers or prompts.
-                self.conv_template.messages = []
-
-                self.conv_template.append_message(self.conv_template.roles[0], None)
-                toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
-                self._user_role_slice = slice(None, len(toks))
-
-                self.conv_template.update_last_message(f"{self.instruction}")
-                toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
-                self._goal_slice = slice(self._user_role_slice.stop, max(self._user_role_slice.stop, len(toks)-1))
-
-                separator = ' ' if self.instruction else ''
-                self.conv_template.update_last_message(f"{self.instruction}{separator}{self.adv_string}")
-                toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
-                self._control_slice = slice(self._goal_slice.stop, len(toks)-1)
-
-                self.conv_template.append_message(self.conv_template.roles[1], None)
-                toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
-                self._assistant_role_slice = slice(self._control_slice.stop, len(toks))
-
-                self.conv_template.update_last_message(f"{self.target}")
-                toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
-                self._target_slice = slice(self._assistant_role_slice.stop, len(toks)-1)
-                self._loss_slice = slice(self._assistant_role_slice.stop-1, len(toks)-2)
-            else:
-                assert False
+            assert False, "Conversation template not supported"
 
         self.conv_template.messages = []
 
@@ -107,6 +104,9 @@ class SuffixManager:
         input_ids = torch.tensor(toks[:self._target_slice.stop])
 
         return input_ids
+
+    # def get_batch_input_ids(self, adv)
+
 
 
 
@@ -152,7 +152,7 @@ def token_gradients(model, input_ids, input_slice, target_slice, loss_slice):
         embed_weights = model.base_model.embed_in.weight
         embeds = model.base_model.embed_in(input_ids.unsqueeze(0).to(device)).detach()
     else:
-        assert False
+        assert False, "Only Llama and GPTNeoX models are supported"
 
     one_hot = torch.zeros(
         input_ids[input_slice].shape[0],
@@ -250,7 +250,8 @@ def sample_control(control_toks, grad, batch_size, topk=256, temp=1, not_allowed
 
     return new_control_toks
 
-#
+# control_cand - are the topk loss minimizing replacements
+# we found for every token in the control slice
 def get_filtered_cands(tokenizer, control_cand, filter_cand=True, curr_control=None):
     """
     Filters invalid candidates from a set of control codes.
@@ -281,6 +282,9 @@ def get_filtered_cands(tokenizer, control_cand, filter_cand=True, curr_control=N
                 count += 1
         else:
             cands.append(decoded_str)
+
+    print(f"Cands are {cands}")
+    print(f"Counts are {count}")
 
     if filter_cand:
         cands = cands + [cands[-1]] * (len(control_cand) - len(cands))
@@ -322,7 +326,7 @@ def get_logits(*, model, tokenizer, input_ids, control_slice, test_controls=None
     if isinstance(test_controls[0], str):
         max_len = control_slice.stop - control_slice.start
         test_ids = [
-            torch.tensor(tokenizer(control, add_special_tokens=False).input_ids[:max_len], device=model.device)
+            torch.tensor(tokenizer(control, add_special_tokens=False).input_ids[:max_len], device=non_mps_device)
             for control in test_controls
         ]
         pad_tok = 0
@@ -339,6 +343,7 @@ def get_logits(*, model, tokenizer, input_ids, control_slice, test_controls=None
             f"(n, {control_slice.stop - control_slice.start}), "
             f"got {test_ids.shape}"
         ))
+
 
     locs = torch.arange(control_slice.start, control_slice.stop).repeat(test_ids.shape[0], 1).to(model.device)
     ids = torch.scatter(
@@ -388,6 +393,93 @@ def forward(*, model, input_ids, attention_mask, batch_size=512):
     del batch_input_ids, batch_attention_mask
 
     return torch.cat(logits, dim=0)
+
+
+# input_ids - original input tokens
+# control_slice - the slice of input ids to replace (like the I in the paper)
+# test_controls - control code strings to substitute? supposedly the str tokens?
+# return_ids - whether to return or not the modified ids of the new tokens
+def get_logits_with_injected_tokens(*,
+                                    model,
+                                    tokenizer,
+                                    original_input_ids: Int[Tensor, "seq_len"],
+                                    control_slice: slice,
+                                    new_adv_suffix: Int[Tensor, ""],
+                                    return_ids=False,
+                                    batch_size=32):
+    """
+    Evaluates model on inputs with injected control codes.
+
+    Parameters
+    ----------
+    model : nn.Module
+        Model to evaluate.
+    tokenizer : Tokenizer
+        Tokenizer to encode controls.
+    input_ids : torch.Tensor
+        Original input IDs.
+    control_slice : slice
+        Slice of input to replace.
+    test_controls : list, optional
+        Control codes to inject.
+    return_ids : bool, optional
+        Whether to return modified IDs.
+    batch_size : int, optional
+        Evaluation batch size.
+
+    Returns
+    -------
+    torch.Tensor
+        Logits from model on modified inputs.
+    """
+
+    assert isinstance(test_controls[0], str) == True
+
+    max_len = control_slice.stop - control_slice.start
+    control_range_indices = torch.arange(control_slice.start, control_slice.stop)
+
+    # test_ids = [
+    #     torch.tensor(tokenizer(control, add_special_tokens=False).input_ids[:max_len], device=non_mps_device)
+    #     for control in test_controls
+    # ]
+    # pad_tok = 0
+    # while pad_tok in input_ids or any([pad_tok in ids for ids in test_ids]):
+    #     pad_tok += 1
+    # nested_ids = torch.nested.nested_tensor(test_ids)
+    # test_ids = torch.nested.to_padded_tensor(nested_ids, pad_tok, (len(test_ids), max_len))
+
+    ids = original_input_ids
+
+    # ids[]
+
+    if not(test_ids[0].shape[0] == control_slice.stop - control_slice.start):
+        raise ValueError((
+            f"test_controls must have shape "
+            f"(n, {control_slice.stop - control_slice.start}), "
+            f"got {test_ids.shape}"
+        ))
+
+    locs = torch.arange(control_slice.start, control_slice.stop).repeat(test_ids.shape[0], 1).to(model.device)
+    ids = torch.scatter(
+        input_ids.unsqueeze(0).repeat(test_ids.shape[0], 1).to(model.device),
+        1,
+        locs,
+        test_ids
+    )
+    if pad_tok >= 0:
+        attn_mask = (ids != pad_tok).type(ids.dtype)
+    else:
+        attn_mask = None
+
+    if return_ids:
+        del locs, test_ids ; gc.collect()
+        return forward(model=model, input_ids=ids, attention_mask=attn_mask, batch_size=batch_size), ids
+    else:
+        del locs, test_ids
+        logits = forward(model=model, input_ids=ids, attention_mask=attn_mask, batch_size=batch_size)
+        del ids ; gc.collect()
+        return logits
+
 
 
 """"
