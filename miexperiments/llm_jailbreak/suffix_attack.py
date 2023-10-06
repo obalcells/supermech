@@ -5,19 +5,14 @@ from torch import Tensor
 from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaForCausalLM, GPTNeoXForCausalLM
 from fastchat.conversation import Conversation, get_conv_template
 from livelossplot import PlotLosses
+from jaxtyping import Int, Float
 from typing import Tuple, List, Optional, Dict
-from jaxtyping import Float, Int
 
-device = "mps"
+device = "cpu"
 non_mps_device = "cpu"
 model_name = "pythia"
 auth_token = ""
 precision = torch.float32
-
-# issues I have with llm-attacks
-# - Can't run pythia because of the .scatter_ mps error
-# - Runs out of memory even with A100 GPU
-
 
 class SuffixManager:
     def __init__(self, *, tokenizer, conv_template: Conversation, instruction: str, target: str, adv_string: List[int]):
@@ -111,7 +106,7 @@ class SuffixManager:
 
 
 # support for different models:
-# 1) A very small one such as pythia 15m to do fast stuff
+# 1) A very small one such as pythia 70m to do fast stuff
 # 2) Llama2
 # 3) Ideally an arbitrary hf model with the same tokenizer as llama
 def get_model_and_tokenizer(model_path="EleutherAI/pythia-1.4b", tokenizer_path="EleutherAI/pythia-1.4b", **kwargs):
@@ -148,7 +143,6 @@ def token_gradients(model, input_ids, input_slice, target_slice, loss_slice):
         embed_weights = model.model.embed_tokens.weight
         embeds = model.model.embed_tokens(input_ids).detach()
     elif isinstance(model, GPTNeoXForCausalLM):
-        print("GPTNeoX was detected")
         embed_weights = model.base_model.embed_in.weight
         embeds = model.base_model.embed_in(input_ids.unsqueeze(0).to(device)).detach()
     else:
@@ -160,6 +154,7 @@ def token_gradients(model, input_ids, input_slice, target_slice, loss_slice):
         dtype=embed_weights.dtype
     ).to(device)
 
+    # maybe use scatter here?
     one_hot[torch.arange(input_ids[input_slice].shape[0]),input_ids[input_slice]] = 1.0
 
     # this returns an error when run on MPS
@@ -175,13 +170,13 @@ def token_gradients(model, input_ids, input_slice, target_slice, loss_slice):
     #    torch.ones(one_hot_cpu.shape[0], 1, device=model.device, dtype=embed_weights.dtype)
     #)
 
-    print(f"One-hot shape is {one_hot.shape}")
-    print(f"Embed matrix has shape {embed_weights.shape}")
+    #print(f"One-hot shape is {one_hot.shape}")
+    #print(f"Embed matrix has shape {embed_weights.shape}")
 
     one_hot.requires_grad_()
-    input_embeds = (one_hot @ embed_weights).unsqueeze(0)
+    #input_embeds = (one_hot @ embed_weights).unsqueeze(0)
 
-    print(f"Input embeds were computed")
+    #print(f"Input embeds were computed")
 
     # now stitch it together with the rest of the embeddings
     #embeds = get_embeddings(model, input_ids.unsqueeze(0)).detach()
@@ -190,43 +185,53 @@ def token_gradients(model, input_ids, input_slice, target_slice, loss_slice):
     full_embeds = torch.cat(
         [
             embeds[:,:input_slice.start,:],
-            input_embeds,
+            (one_hot @ embed_weights).unsqueeze(0),
             embeds[:,input_slice.stop:,:]
         ],
-        dim=1)
+        dim=1
+    ).to(device)
 
-    print(f"Stiched embeddings")
+    #print(f"Stiched embeddings")
 
-    print(f"Stiched embeddings have type {full_embeds.dtype}")
-    print(f"Should have type {embeds.dtype}")
+    #print(f"Stiched embeddings have type {full_embeds.dtype}")
+    #print(f"Should have type {embeds.dtype}")
 
-    print(f"Shape of full embeds is: {full_embeds.shape}")
-
-    full_embeds = full_embeds.to(device)
-
-    model_output = model(inputs_embeds=full_embeds)
-
-    print("Compute the forward pass")
+    #print(f"Shape of full embeds is: {full_embeds.shape}")
 
     logits = model(inputs_embeds=full_embeds).logits
 
-    print(f"Gotten logits {logits.shape}")
+    #print("Compute the forward pass")
+
+    #logits = model(inputs_embeds=full_embeds).logits
+
+    #print(f"Gotten logits {logits.shape}")
 
     targets = input_ids[target_slice].to(device)
+
     loss = nn.CrossEntropyLoss()(logits[0,loss_slice,:], targets)
 
-    print(f"Forward pass")
+    #print(f"Forward pass")
 
     loss.backward()
 
     grad = one_hot.grad.clone()
     grad = grad / grad.norm(dim=-1, keepdim=True)
 
+    # should we do this?
+    model.zero_grad()
+
     return grad
 
 
 # selects k tokens within the topk (allowed) control tokens
-def sample_control(control_toks, grad, batch_size, topk=256, temp=1, not_allowed_tokens=None):
+def sample_control(
+    control_toks,
+    grad,
+    batch_size,
+    topk=256,
+    temp=1,
+    not_allowed_tokens=None
+):
 
     if not_allowed_tokens is not None:
         grad[:, not_allowed_tokens.to(grad.device)] = np.infty
@@ -252,7 +257,12 @@ def sample_control(control_toks, grad, batch_size, topk=256, temp=1, not_allowed
 
 # control_cand - are the topk loss minimizing replacements
 # we found for every token in the control slice
-def get_filtered_cands(tokenizer, control_cand, filter_cand=True, curr_control=None):
+def get_filtered_cands(
+    tokenizer,
+    control_cand: Int[Tensor, "batch_size"],
+    filter_cand=True,
+    curr_control=None
+) -> List[str]:
     """
     Filters invalid candidates from a set of control codes.
 
@@ -283,8 +293,8 @@ def get_filtered_cands(tokenizer, control_cand, filter_cand=True, curr_control=N
         else:
             cands.append(decoded_str)
 
-    print(f"Cands are {cands}")
-    print(f"Counts are {count}")
+    #print(f"Cands are {cands}")
+    #print(f"Counts are {count}")
 
     if filter_cand:
         cands = cands + [cands[-1]] * (len(control_cand) - len(cands))
@@ -395,91 +405,91 @@ def forward(*, model, input_ids, attention_mask, batch_size=512):
     return torch.cat(logits, dim=0)
 
 
-# input_ids - original input tokens
-# control_slice - the slice of input ids to replace (like the I in the paper)
-# test_controls - control code strings to substitute? supposedly the str tokens?
-# return_ids - whether to return or not the modified ids of the new tokens
-def get_logits_with_injected_tokens(*,
-                                    model,
-                                    tokenizer,
-                                    original_input_ids: Int[Tensor, "seq_len"],
-                                    control_slice: slice,
-                                    new_adv_suffix: Int[Tensor, ""],
-                                    return_ids=False,
-                                    batch_size=32):
-    """
-    Evaluates model on inputs with injected control codes.
+class SuffixManager:
+    def __init__(self, tokenizer, conv_template: Conversation, instruction: str, target: str, adv_string: List[int]):
 
-    Parameters
-    ----------
-    model : nn.Module
-        Model to evaluate.
-    tokenizer : Tokenizer
-        Tokenizer to encode controls.
-    input_ids : torch.Tensor
-        Original input IDs.
-    control_slice : slice
-        Slice of input to replace.
-    test_controls : list, optional
-        Control codes to inject.
-    return_ids : bool, optional
-        Whether to return modified IDs.
-    batch_size : int, optional
-        Evaluation batch size.
+        self.tokenizer = tokenizer
+        self.conv_template = conv_template
+        self.instruction = instruction
+        self.target = target
+        self.adv_string = adv_string
 
-    Returns
-    -------
-    torch.Tensor
-        Logits from model on modified inputs.
-    """
+    def get_prompt(self, adv_string=None):
 
-    assert isinstance(test_controls[0], str) == True
+        if adv_string is not None:
+            self.adv_string = adv_string
 
-    max_len = control_slice.stop - control_slice.start
-    control_range_indices = torch.arange(control_slice.start, control_slice.stop)
+        self.conv_template.append_message(self.conv_template.roles[0], f"{self.instruction} {self.adv_string}")
+        self.conv_template.append_message(self.conv_template.roles[1], f"{self.target}")
+        prompt = self.conv_template.get_prompt()
 
-    # test_ids = [
-    #     torch.tensor(tokenizer(control, add_special_tokens=False).input_ids[:max_len], device=non_mps_device)
-    #     for control in test_controls
-    # ]
-    # pad_tok = 0
-    # while pad_tok in input_ids or any([pad_tok in ids for ids in test_ids]):
-    #     pad_tok += 1
-    # nested_ids = torch.nested.nested_tensor(test_ids)
-    # test_ids = torch.nested.to_padded_tensor(nested_ids, pad_tok, (len(test_ids), max_len))
+        encoding = self.tokenizer(prompt)
+        toks = encoding.input_ids
 
-    ids = original_input_ids
+        if self.conv_template.name == 'llama-2':
+            self.conv_template.messages = []
 
-    # ids[]
+            self.conv_template.append_message(self.conv_template.roles[0], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._user_role_slice = slice(None, len(toks))
 
-    if not(test_ids[0].shape[0] == control_slice.stop - control_slice.start):
-        raise ValueError((
-            f"test_controls must have shape "
-            f"(n, {control_slice.stop - control_slice.start}), "
-            f"got {test_ids.shape}"
-        ))
+            self.conv_template.update_last_message(f"{self.instruction}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._goal_slice = slice(self._user_role_slice.stop, max(self._user_role_slice.stop, len(toks)))
 
-    locs = torch.arange(control_slice.start, control_slice.stop).repeat(test_ids.shape[0], 1).to(model.device)
-    ids = torch.scatter(
-        input_ids.unsqueeze(0).repeat(test_ids.shape[0], 1).to(model.device),
-        1,
-        locs,
-        test_ids
-    )
-    if pad_tok >= 0:
-        attn_mask = (ids != pad_tok).type(ids.dtype)
-    else:
-        attn_mask = None
+            separator = ' ' if self.instruction else ''
+            self.conv_template.update_last_message(f"{self.instruction}{separator}{self.adv_string}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._control_slice = slice(self._goal_slice.stop, len(toks))
 
-    if return_ids:
-        del locs, test_ids ; gc.collect()
-        return forward(model=model, input_ids=ids, attention_mask=attn_mask, batch_size=batch_size), ids
-    else:
-        del locs, test_ids
-        logits = forward(model=model, input_ids=ids, attention_mask=attn_mask, batch_size=batch_size)
-        del ids ; gc.collect()
-        return logits
+            self.conv_template.append_message(self.conv_template.roles[1], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._assistant_role_slice = slice(self._control_slice.stop, len(toks))
 
+            self.conv_template.update_last_message(f"{self.target}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._target_slice = slice(self._assistant_role_slice.stop, len(toks)-2)
+            self._loss_slice = slice(self._assistant_role_slice.stop-1, len(toks)-3)
+
+        elif self.conv_template.name == 'oasst_pythia':
+            # This is specific to the vicuna and pythia tokenizer and conversation prompt.
+            # It will not work with other tokenizers or prompts.
+            self.conv_template.messages = []
+
+            self.conv_template.append_message(self.conv_template.roles[0], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._user_role_slice = slice(None, len(toks))
+
+            self.conv_template.update_last_message(f"{self.instruction}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._goal_slice = slice(self._user_role_slice.stop, max(self._user_role_slice.stop, len(toks)-1))
+
+            separator = ' ' if self.instruction else ''
+            self.conv_template.update_last_message(f"{self.instruction}{separator}{self.adv_string}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._control_slice = slice(self._goal_slice.stop, len(toks)-1)
+
+            self.conv_template.append_message(self.conv_template.roles[1], None)
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._assistant_role_slice = slice(self._control_slice.stop, len(toks))
+
+            self.conv_template.update_last_message(f"{self.target}")
+            toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
+            self._target_slice = slice(self._assistant_role_slice.stop, len(toks)-1)
+            self._loss_slice = slice(self._assistant_role_slice.stop-1, len(toks)-2)
+        else:
+            assert False, "Conversation template not supported"
+
+        self.conv_template.messages = []
+
+        return prompt
+
+    def get_input_ids(self, adv_string=None):
+        prompt = self.get_prompt(adv_string=adv_string)
+        toks = self.tokenizer(prompt).input_ids
+        input_ids = torch.tensor(toks[:self._target_slice.stop])
+
+        return input_ids
 
 
 """"
@@ -521,10 +531,85 @@ def load_conversation_template(template_name):
     return conv_template
 
 
+def create_batch_of_control_tokens(
+    new_adv_suffix_strings: List[str],
+    suffix_manager: SuffixManager
+) -> Tuple[Int[Tensor, "batch_size len"], Int[Tensor, "batch_size len"]]:
+    # create the batch such that we can feed it all at once into the model
+    # this isn't very efficient ):
 
-"""
-The algorithm
-"""
+    # stores the list of tokenized prompts that we want to test
+    all_tokens = []
+    max_len = 0
+    
+    for adv_string in new_adv_suffix_strings:
+        # print(tokenizer.decode(adv_suffix))
+        # adv_string = tokenizer.decode(adv_suffix)
+        # print(suffix_manager.get_input_ids(adv_string=adv_string))
+        
+        all_tokens.append(suffix_manager.get_input_ids(adv_string=adv_string))
+        max_len = max(len(all_tokens[-1]), max_len)
+        
+    # print(type(max_len))
+    # print(type(batch_size))
+    # print(tokenizer.pad_token_id)
+    batch = torch.full((batch_size, max_len), tokenizer.pad_token_id, dtype=torch.long, device=device)
+    # tokens = torch.full((bsz, total_len), pad_id, dtype=torch.long, device="cuda")
+    
+    for i, token_ids in enumerate(all_tokens):
+        # pad tokens[i] to have len max_len with tokenizer.pad_token_id
+        # tokens[i] = torch.cat((tokens[i], torch.zeros(max_len - len(tokens[i]), dtype=torch.long)), dim=0)
+    
+        # tokens[k, : len(t)] = torch.tensor(t, dtype=torch.long, device="cuda")
+        batch[i, :len(token_ids)] = torch.tensor(token_ids, dtype=torch.long, device=device)
+    
+    attention_mask = (batch != tokenizer.pad_token_id).type(batch.dtype)
+    
+    return batch, attention_mask 
+
+# returns the loss for each of the adv suffixes we want to test
+def cross_entropy_loss(
+    batch: Int[Tensor, "batch_size seq_len"],
+    logits: Float[Tensor, "batch_size seq_len d_vocab"],
+    suffix_manager: SuffixManager
+) -> Float[Tensor, "batch_size"]:
+
+    # the loss slice is shifted by 1 to the left
+    target_slice = slice(suffix_manager._target_slice.start, suffix_manager._target_slice.stop)
+    loss_slice = slice(suffix_manager._target_slice.start-1, suffix_manager._target_slice.stop-1)
+    
+    # we want the shape of the labels to match the first two dimensions of the batch
+    # to be able to apply the gather operation
+    labels = einops.repeat(batch[0, target_slice], "target_size -> batch_size target_size 1", batch_size=batch.shape[0])
+
+    #print("Loss logits shape", logits[:,loss_slice].log_softmax(dim=-1).shape)
+    #print("Labels shape", labels.shape)
+
+    target_logprobs = torch.gather(
+        logits[:,loss_slice].log_softmax(dim=-1),
+        dim=-1,
+        index=labels
+    ).squeeze(-1) # we have one extra dimension at the end we don't need 
+
+    #print(f"Logprobs has shape {target_logprobs.shape}")
+
+    return target_logprobs.mean(dim=-1)
+
+
+def generate(model,
+             tokenizer,
+             prompt: str,
+             max_new_tokens: int = 25,
+             generation_config = None
+) -> str:
+    if generation_config is None:
+        generation_config = model.generation_config
+        generation_config.max_new_tokens = max_new_tokens
+
+    inputs = tokenizer(prompt, return_tensors="pt")
+    tokens = model.generate(**inputs, generation_config=generation_config)
+    return tokenizer.decode(tokens[0])
+
 
 
 

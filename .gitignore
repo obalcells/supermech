@@ -1,7 +1,10 @@
 .venv/
 __pycache__/
 temp/
-.egg-info/
+*.egg-info/
 .DS_Store
 .html
 miexperiments/models
+miexperiments/causal-checker
+miexperiments/Mech-Interp-Challenges
+miexperiments/arena-hackathon-attribution-patching
