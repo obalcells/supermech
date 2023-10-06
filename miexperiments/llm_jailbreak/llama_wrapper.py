@@ -115,7 +115,7 @@ class Llama7BChatHelper:
         tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side='left')
         tokenizer.pad_token = tokenizer.eos_token
         model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, device_map="balanced").eval()
-        return model, tokenize
+        return model, tokenizer
 
     def set_save_internal_decodings(self, value):
         for layer in self.model.model.layers:
