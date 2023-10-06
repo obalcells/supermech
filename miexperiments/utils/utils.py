@@ -1,5 +1,5 @@
 import einops
-import torch as t
+import torch
 from torch import Tensor
 from torch.nn.functional import normalize
 from typing import List, Union, Optional
