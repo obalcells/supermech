@@ -36,6 +36,26 @@ def download_models():
 
 # %% Helper functions/classes
 
+def print_tensors_memory():
+    # print("Tensor objects and the memory they take up:")
+    # ordered_objs = []
+    # for obj in gc.get_objects():
+    #     try:
+    #         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+    #             if isinstance(obj, Tensor) and not isinstance(obj, torch.nn.parameter.Parameter):
+    #                 mem_size = obj.element_size() * obj.nelement()
+    #                 ordered_obj.append((obj.size(), mem_size))
+    #     except:
+    #         pass
+    
+    # sorted(ordered_objs, key=lambda x: x[1], reverse=True)
+    # print("The 10 tensors occupying the most memory are:")
+    # for obj_size, mem_size in ordered_objs[:10]:
+    #     print(f"{obj_size}: {mem_size//1024//1024} MB")
+
+    print("Printing CUDA memory summary:")
+    print(torch.cuda.memory_summary())
+
 class ComparisonDataset(torch.utils.data.Dataset):
     def __init__(self, data, system_prompt, tokenizer):
         self.data = data
@@ -313,7 +333,7 @@ class SuffixAttack:
         instruction: str,
         target: str,
         initial_adv_suffix: str,
-        batch_size: int=1024,
+        batch_size: int=512,
         topk: int=256,
         temp: float=1.0
     ):
@@ -345,8 +365,15 @@ class SuffixAttack:
         self.temp = temp 
 
         self.device = self.model.device 
+        print(f"Model device is {self.device}")
 
     def step(self):
+        # let's check how much memory the current tensors are taking up
+        assert not self.model.training, "Model must be in eval mode"
+
+        print_tensors_memory()
+        print(f"1 - Beginning of step {torch.cuda.memory_allocated(self.device)/1024/1024} MB")
+
         # get token ids for the initial adversarial string
         input_ids, suffix_slice, target_slice = self.get_input_ids_for_suffix(
             adv_suffix=self.adv_suffix,
@@ -360,19 +387,34 @@ class SuffixAttack:
 
         print("B")
 
+        # let's check how much memory the current tensors are taking up
+        print(f"8 - After token gradients {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         candidate_strings, batch_of_candidates = self.get_batch_of_suffix_candidates(
             input_ids,
             suffix_slice,
             token_gradients
         )
+        
+        print(f"12 - After generating batch of candidates {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
+        print(f"Shape of batch of candidates {batch_of_candidates.shape}")
 
         print("C")
 
+        # let's check how much memory the current tensors are taking up
+        print_tensors_memory()
+
         del token_gradients; gc.collect()
+        torch.cuda.empty_cache()
+
+        print(f"13 - After deleting token gradients {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         with torch.no_grad():
             attention_mask = (batch_of_candidates != self.tokenizer.pad_token_id).type(batch_of_candidates.dtype)
+            print(f"14 - After creating attn mask {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
             logits = self.model(input_ids=batch_of_candidates, attention_mask=attention_mask).logits
+            print(f"15 - After forward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
             target_len = target_slice.stop - target_slice.start
             target_slice = slice(batch_of_candidates.shape[1] - target_len, batch_of_candidates.shape[1])
             candidate_losses = self.get_loss(input_ids=batch_of_candidates, logits=logits, target_slice=target_slice)
@@ -380,6 +422,7 @@ class SuffixAttack:
             self.adv_suffix = candidate_strings[best_new_adv_suffix_idx]
 
         del logits, batch_of_candidates, attention_mask; gc.collect()
+        torch.cuda.empty_cache()
 
     # returns the input tokens for the given suffix string
     # and also the slice within the tokens array containing the suffix and the target strings
@@ -532,11 +575,15 @@ class SuffixAttack:
         else:
             assert False, "Only Llama and GPTNeoX models are supported"
 
+        print(f"2 - After computing embeddings {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         one_hot = torch.zeros(
             input_ids[suffix_slice].shape[0],
             embed_weights.shape[0],
             dtype=embed_weights.dtype
         ).to(self.device)
+
+        print(f"3 - After creating one_hot {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # maybe use scatter here?
         one_hot[torch.arange(input_ids[suffix_slice].shape[0]),input_ids[suffix_slice]] = 1.0
@@ -569,7 +616,11 @@ class SuffixAttack:
             dim=1
         ).to(self.device)
 
+        print(f"3 - After creating one_hot {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         logits = self.model(inputs_embeds=full_embeds).logits.to(self.device)
+
+        print(f"4 - After the forward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # we add one extra dimension at the beginning to the input token ids
         batch = input_ids.unsqueeze(0).to(self.device)
@@ -577,10 +628,18 @@ class SuffixAttack:
 
         loss.backward()
 
+        print(f"5 - After backward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         grad = one_hot.grad.clone()
         grad = grad / grad.norm(dim=-1, keepdim=True) # why do this?
 
-        del logits, full_embeds, one_hot, embeds, embed_weights; gc.collect()
+        print(f"6 - After cloning grad {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
+        self.model.zero_grad()
+        del logits, batch, full_embeds, one_hot, embeds, embed_weights, loss; gc.collect()
+        torch.cuda.empty_cache()
+
+        print(f"7 - After deleting many things {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         return grad
 
@@ -609,6 +668,8 @@ class SuffixAttack:
         adv_suffix_token_ids = adv_suffix_token_ids.to(grad.device)
 
         original_control_toks = adv_suffix_token_ids.repeat(self.batch_size, 1)
+
+        print(f"9 - After creating original control toks {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         new_token_pos = torch.arange(
             0,
@@ -715,14 +776,16 @@ class SuffixAttack:
 
         assert len(valid_candidate_strings) > 0, "All candidate strings were invalid"
 
+        print(f"10 - After filtering candidate strings {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         batch_size = len(valid_candidate_strings)
         batch = torch.full((batch_size, max_len_token_ids), self.tokenizer.pad_token_id, dtype=torch.long, device=self.device)
+
+        print(f"11 - After creating batch {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # make sure that the target string is located in the same place for all candidates
         for idx, candidate_input_ids in enumerate(valid_candidate_input_ids):
             # Pad each candidate input ids from the length to match the maximum length
-            # print(f"Candidate input ids: {valid_candidate_input_ids}")
-            # print("")
             batch[idx, -len(candidate_input_ids):] = candidate_input_ids
 
         return valid_candidate_strings, batch 
