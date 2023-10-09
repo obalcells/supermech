@@ -12,7 +12,6 @@ import einops
 import gc
 from IPython.display import display, HTML
 
-
 # %% Base Suffix Attack class
 class SuffixAttack:
     def __init__(
@@ -22,9 +21,10 @@ class SuffixAttack:
         instruction: str,
         target: str,
         initial_adv_suffix: str,
-        batch_size: int=1024,
+        batch_size: int=512,
         topk: int=256,
-        temp: float=1.0
+        temp: float=1.0,
+        allow_non_ascii: bool=False,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -35,7 +35,6 @@ class SuffixAttack:
             self.tokenizer.padding_side = 'left'
         elif isinstance(self.model, GPTNeoXForCausalLM):
             conv_template_name = 'oasst_pythia'
-            self.tokenizer.padding_side = 'left'
         else:
             assert False, "Only Llama and GPTNeoX models are supported"        
 
@@ -54,34 +53,165 @@ class SuffixAttack:
         self.topk = topk 
         self.temp = temp 
 
+        self.not_allowed_tokens = None if allow_non_ascii else get_nonascii_toks(self.tokenizer)
+
         self.device = self.model.device 
+        print(f"Model device is {self.device}")
 
     def step(self):
+        # let's check how much memory the current tensors are taking up
+        assert not self.model.training, "Model must be in eval mode"
+
+        # print_tensors_memory()
+        # print(f"1 - Beginning of step {torch.cuda.memory_allocated(self.device)/1024/1024} MB")
+
         # get token ids for the initial adversarial string
         input_ids, suffix_slice, target_slice = self.get_input_ids_for_suffix(
             adv_suffix=self.adv_suffix,
         )
-        
-        token_gradients = self.token_gradients(input_ids, suffix_slice, target_slice)
+
+        input_ids = input_ids.to(self.device)
+
+        # FIX 2) Are the input ids the same
+
+        their_suffix_manager = SuffixManager(
+            tokenizer=self.tokenizer,
+            conv_template=self.conv_template,
+            instruction=self.instruction,
+            target=self.target,
+            adv_string=self.adv_suffix
+        )
+
+        # print("")
+        # print("FIX 2")
+        # print(f"MY input ids: {input_ids}")
+        # their_input_ids = their_suffix_manager.get_input_ids(adv_string=self.adv_suffix).to(self.device)
+        # print(f"THEIR input ids: {their_input_ids}")
+        # print(f"MY decoded input ids: {self.tokenizer.decode(input_ids, skip_special_tokens=False)}")
+        # print(f"THEIR decoded input ids: {self.tokenizer.decode(their_input_ids, skip_special_tokens=False)}")
+
+        assert target_slice.stop == len(input_ids), "Target slice test"
+
+        token_gradients_ = self.token_gradients(input_ids, suffix_slice, target_slice)
+
+        # FIX 3) Are the token gradients the same?
+
+        their_token_gradients = token_gradients(
+                        self.model,
+                        their_input_ids,
+                        their_suffix_manager._control_slice,
+                        their_suffix_manager._target_slice,
+                        their_suffix_manager._loss_slice
+                    )
+
+        # check if the tensors match
+        same_grads =  torch.allclose(token_gradients_, their_token_gradients, atol=1e-4), "Token gradients test"
+        # print("")
+        # print("FIX 3")
+        # print(f"Token gradients the same? {same_grads}")
+        # print(f"MY token gradients shape {token_gradients_.shape}")
+        # print(f"THEIR token gradients shape {their_token_gradients.shape}")
+        # print(f"MY token gradients: {token_gradients_[0][:10]}")
+        # print(f"THEIR token gradients: {their_token_gradients[0][:10]}")
+
+        # print(f"8 - After token gradients {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         candidate_strings, batch_of_candidates = self.get_batch_of_suffix_candidates(
             input_ids,
             suffix_slice,
-            token_gradients
+            token_gradients_,
+            filter_by_size=True,
+            random_seed=0 # to ensure reproducibility for the randint call
         )
 
-        del token_gradients; gc.collect()
+        print("")
+        print("FIX 4")
+        print(f"MY candidate strings {candidate_strings[-10:]}")
+        print(f"MY candidate strings {batch_of_candidates[-10:]}")
+
+        del token_gradients_
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        # LLM-attacks code
+        # Step 3.1 Slice the input to locate the adversarial suffix.
+        adv_suffix_tokens = input_ids[their_suffix_manager._control_slice].to(self.device)
+
+        # Step 3.2 Randomly sample a batch of replacements.
+        new_adv_suffix_toks = sample_control(adv_suffix_tokens,
+                    their_token_gradients,
+                    self.batch_size,
+                    topk=self.topk,
+                    temp=self.temp,
+                    not_allowed_tokens=self.not_allowed_tokens)
+
+        print(f"THEIR New adv suffix toks before filtering {new_adv_suffix_toks[-10:]}")
+
+        # Step 3.3 This step ensures all adversarial candidates have the same number of tokens.
+        # This step is necessary because tokenizers are not invertible
+        # so Encode(Decode(tokens)) may produce a different tokenization.
+        # We ensure the number of token remains to prevent the memory keeps growing and run into OOM.
+        new_adv_suffix = get_filtered_cands(self.tokenizer,
+                                            new_adv_suffix_toks,
+                                            filter_cand=False, # works with false
+                                            curr_control=self.adv_suffix)
+
+        # FIX 4) Are the candidate strings the same?
+        print(f"THEIR num of new candidates {len(new_adv_suffix)}")
+        print(f"MY candidate suffixes {candidate_strings[:10]}")        
+        print(f"THEIR candidate suffixes {new_adv_suffix[:10]}")        
+        
+        assert new_adv_suffix == candidate_strings, "Candidate strings test"
 
         with torch.no_grad():
+            # FIX 5) Are the logits the same?
+            their_logits, their_ids = get_logits(model=model,
+                                    tokenizer=tokenizer,
+                                    input_ids=input_ids,
+                                    control_slice=suffix_manager._control_slice,
+                                    test_controls=new_adv_suffix,
+                                    return_ids=True)
+
+            losses = target_loss(their_logits, their_ids, their_suffix_manager._target_slice)
+
+            print(f"MY first ids are {batch_of_candidates[0]}")
+            print(f"THEIR first ids are {their_ids[0]}")
+
+            # print(f"12 - After generating batch of candidates {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
+            # print(f"Shape of batch of candidates {batch_of_candidates.shape}")
+
+            # let's check how much memory the current tensors are taking up
+            # print_tensors_memory()
+
+            # print(f"13 - After deleting token gradients {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
             attention_mask = (batch_of_candidates != self.tokenizer.pad_token_id).type(batch_of_candidates.dtype)
+            # print(f"14 - After creating attn mask {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
             logits = self.model(input_ids=batch_of_candidates, attention_mask=attention_mask).logits
+
+            same_logits = torch.allclose(logits, their_logits, atol=1e-4), "Logits test"
+
+            print(f"Logits same? {same_logits}")
+            print(f"MY logits first toks {logits[0][:10]}")
+            print(f"THEIR logits first toks {their_logits[0][:10]}")
+
+            # print(f"15 - After forward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
             target_len = target_slice.stop - target_slice.start
             target_slice = slice(batch_of_candidates.shape[1] - target_len, batch_of_candidates.shape[1])
             candidate_losses = self.get_loss(input_ids=batch_of_candidates, logits=logits, target_slice=target_slice)
+
+            print(f"MY losses are {candidate_losses}")
+            print(f"THEIR losses are {losses}")
+
+            assert same_logits, "Logits must be the same"
+
             best_new_adv_suffix_idx = candidate_losses.argmin()
             self.adv_suffix = candidate_strings[best_new_adv_suffix_idx]
 
-        del logits, batch_of_candidates, attention_mask; gc.collect()
+        del logits, batch_of_candidates, attention_mask
+        gc.collect()
+        torch.cuda.empty_cache()
 
     # returns the input tokens for the given suffix string
     # and also the slice within the tokens array containing the suffix and the target strings
@@ -92,14 +222,17 @@ class SuffixAttack:
 
         self.conv_template.messages = []
 
-        self.conv_template.append_message(self.conv_template.roles[0], f"{self.instruction} {adv_suffix}")
+        self.conv_template.append_message(self.conv_template.roles[0], f"{self.instruction} {self.adv_suffix}")
         self.conv_template.append_message(self.conv_template.roles[1], f"{self.target}")
         prompt = self.conv_template.get_prompt()
 
         encoding = self.tokenizer(prompt)
         toks = encoding.input_ids
 
+        self.conv_template.messages = []
+
         if self.conv_template.name == 'llama-2':
+
             self.conv_template.append_message(self.conv_template.roles[0], None)
             toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
             user_role_slice = slice(None, len(toks))
@@ -109,7 +242,7 @@ class SuffixAttack:
             goal_slice = slice(user_role_slice.stop, max(user_role_slice.stop, len(toks)))
 
             separator = ' ' if self.instruction else ''
-            self.conv_template.update_last_message(f"{self.instruction}{separator}{adv_suffix}")
+            self.conv_template.update_last_message(f"{self.instruction}{separator}{self.adv_suffix}")
             toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
             suffix_slice = slice(goal_slice.stop, len(toks))
 
@@ -122,16 +255,6 @@ class SuffixAttack:
             target_slice = slice(assistant_role_slice.stop, len(toks)-2)
 
         elif self.conv_template.name == "oasst_pythia":
-            self.conv_template.append_message(self.conv_template.roles[0], f"{self.instruction} {adv_suffix}")
-            self.conv_template.append_message(self.conv_template.roles[1], f"{self.target}")
-            prompt = self.conv_template.get_prompt()
-
-            # now we have to figure out which tokens correspond to the suffix and the target
-            encoding = self.tokenizer(prompt)
-            toks = encoding.input_ids
-
-            self.conv_template.messages = []
-
             self.conv_template.append_message(self.conv_template.roles[0], None)
             toks = self.tokenizer(self.conv_template.get_prompt()).input_ids
             user_role_slice = slice(None, len(toks))
@@ -176,15 +299,35 @@ class SuffixAttack:
         # the loss slice is shifted by 1 to the left
         loss_slice = slice(target_slice.start-1, target_slice.stop-1)
 
-        labels = einops.repeat(input_ids[:,target_slice], "batch_size seq_len -> batch_size seq_len 1", batch_size=logits.shape[0])
+        # labels = einops.repeat(
+        #     input_ids[:,target_slice],
+        #     "batch_size seq_len -> batch_size seq_len 1",
+        #     batch_size=logits.shape[0]
+        # ).to(self.device)
 
-        target_logprobs = torch.gather(
-            logits[:,loss_slice].log_softmax(dim=-1),
-            dim=-1,
-            index=labels
-        ).squeeze(-1) # we have one extra dimension at the end we don't need
+        # if logits.device != self.model.device:
+        #     print(f"Logits device {logits.device}")
+        #     print(f"Labels device {labels.device}")
+        #     print(f"Model device {self.model.device}")
 
-        return -target_logprobs.mean(dim=-1)
+        # target_logprobs = torch.gather(
+        #     logits[:,loss_slice].log_softmax(dim=-1),
+        #     dim=-1,
+        #     index=labels
+        # ).squeeze(-1) # we have one extra dimension at the end we don't need
+
+        # return -target_logprobs.mean(dim=-1)
+
+        batch_size = logits.shape[0]
+
+        loss = nn.CrossEntropyLoss(reduction='none')(
+            einops.rearrange(logits[:,loss_slice], "batch_size seq_len d_vocab -> (batch_size seq_len) d_vocab"),
+            einops.rearrange(input_ids[:,target_slice], "batch_size seq_len -> (batch_size seq_len)")
+        )
+
+        loss = einops.reduce(loss, "(batch_size seq_len) -> batch_size", batch_size=batch_size, reduction='mean')
+
+        return loss
 
     # returns the loss for each of the adv suffixes we want to test
     # at the moment this is just the cross entropy loss on the target slice
@@ -202,15 +345,15 @@ class SuffixAttack:
         if adv_suffix is None:
             adv_suffix = self.adv_suffix
         input_ids, suffix_slice, target_slice = self.get_input_ids_for_suffix(adv_suffix=adv_suffix)
-        batch = input_ids.unsqueeze(0)
-        attention_mask = (batch != self.tokenizer.pad_token_id).type(batch.dtype)
-        logits = self.model(input_ids=batch, attention_mask=attention_mask).logits
+        batch = input_ids.unsqueeze(0).to(self.device)
+        attention_mask = (batch != self.tokenizer.pad_token_id).type(batch.dtype).to(self.device)
+        logits = self.model(input_ids=batch, attention_mask=attention_mask).logits.to(self.device)
         return self.get_loss(input_ids=batch, logits=logits, target_slice=target_slice)[0].item()
 
     def get_loss_for_input_ids(self, input_ids: Int[Tensor, "seq_len"], target_slice: slice) -> Float:
-        batch = input_ids.unsqueeze(0)
-        attention_mask = (batch != self.tokenizer.pad_token_id).type(batch.dtype)
-        logits = self.model(input_ids=batch, attention_mask=attention_mask).logits
+        batch = input_ids.unsqueeze(0).to(self.device)
+        attention_mask = (batch != self.tokenizer.pad_token_id).type(batch.dtype).to(self.device)
+        logits = self.model(input_ids=batch, attention_mask=attention_mask).logits.to(self.device)
         loss = self.get_loss(input_ids=input_ids.unsqueeze(0), logits=logits, target_slice=target_slice)[0].item()
         return loss
 
@@ -225,18 +368,22 @@ class SuffixAttack:
 
         if isinstance(self.model, LlamaForCausalLM):
             embed_weights = self.model.model.embed_tokens.weight
-            embeds = self.model.model.embed_tokens(input_ids).detach()
+            embeds = self.model.model.embed_tokens(input_ids.unsqueeze(0).to(self.device)).detach()
         elif isinstance(self.model, GPTNeoXForCausalLM):
             embed_weights = self.model.base_model.embed_in.weight
             embeds = self.model.base_model.embed_in(input_ids.unsqueeze(0).to(self.device)).detach()
         else:
             assert False, "Only Llama and GPTNeoX models are supported"
 
+        # print(f"2 - After computing embeddings {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         one_hot = torch.zeros(
             input_ids[suffix_slice].shape[0],
             embed_weights.shape[0],
             dtype=embed_weights.dtype
         ).to(self.device)
+
+        # print(f"3 - After creating one_hot {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # maybe use scatter here?
         one_hot[torch.arange(input_ids[suffix_slice].shape[0]),input_ids[suffix_slice]] = 1.0
@@ -245,7 +392,6 @@ class SuffixAttack:
         #one_hot = torch.zeros(
         #    input_ids[input_slice].shape[0],
         #    embed_weights.shape[0],
-        #    device='cpu',
         #    dtype=embed_weights.dtype
         #)
         #one_hot = one_hot_cpu.scatter(
@@ -269,23 +415,30 @@ class SuffixAttack:
             dim=1
         ).to(self.device)
 
-        # is this needed here too?
-        self.model.zero_grad()
+        # print(f"3 - After creating one_hot {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
-        logits = self.model(inputs_embeds=full_embeds).logits
+        logits = self.model(inputs_embeds=full_embeds).logits.to(self.device)
+
+        # print(f"4 - After the forward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # we add one extra dimension at the beginning to the input token ids
-        batch = input_ids.unsqueeze(0)
+        batch = input_ids.unsqueeze(0).to(self.device)
         loss = self.get_loss(input_ids=batch, logits=logits, target_slice=target_slice)
 
         loss.backward()
 
+        # print(f"5 - After backward pass {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         grad = one_hot.grad.clone()
         grad = grad / grad.norm(dim=-1, keepdim=True) # why do this?
 
-        # is this necessary?
+        # print(f"6 - After cloning grad {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         self.model.zero_grad()
-        del logits, full_embeds, one_hot, embeds, embed_weights; gc.collect()
+        del logits, batch, full_embeds, one_hot, embeds, embed_weights, loss; gc.collect()
+        torch.cuda.empty_cache()
+
+        # print(f"7 - After deleting many things {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         return grad
 
@@ -298,7 +451,6 @@ class SuffixAttack:
         adv_suffix_slice: slice,
         grad: Float[Tensor, "suffix_len d_vocab"], # what does this batch_size represent?
         filter_by_size=True,
-        # not_allowed_tokens=None
         random_seed=None
     ) -> Tuple[List[str], Int[Tensor, "n_cands seq_len"]]:
         adv_suffix_token_ids = input_ids[adv_suffix_slice]
@@ -306,14 +458,16 @@ class SuffixAttack:
         assert len(adv_suffix_token_ids.shape) == 1, "The adv suffix array must be 1-dimensional at the moment"
         assert len(adv_suffix_token_ids) == grad.shape[0], "The length of the suffix (in tokens) must match the length of the gradient"
 
-        # TODO: Add support for not_allowed_tokens
-        # if not_allowed_tokens is not None:
-        #     grad[:, not_allowed_tokens.to(grad.device)] = np.infty
+        if self.not_allowed_tokens is not None:
+            grad[:, self.not_allowed_tokens.to(grad.device)] = np.infty
 
         top_indices = (-grad).topk(self.topk, dim=1).indices
         adv_suffix_token_ids = adv_suffix_token_ids.to(grad.device)
 
         original_control_toks = adv_suffix_token_ids.repeat(self.batch_size, 1)
+        print(f"Shape of original control toks {original_control_toks.shape}")
+
+        # print(f"9 - After creating original control toks {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         new_token_pos = torch.arange(
             0,
@@ -332,6 +486,8 @@ class SuffixAttack:
         )
 
         new_control_toks = original_control_toks.scatter_(1, new_token_pos.unsqueeze(-1), new_token_val)
+
+        print(f"MY New control toks {new_control_toks[-10:]}")
 
         # print(f"Prev suffix toks are: {adv_suffix_token_ids}")
         # print(f"First new control toks are: {new_control_toks[0]}")
@@ -352,6 +508,8 @@ class SuffixAttack:
 
         # the problem is here??
         new_adv_strings = [self.tokenizer.decode(toks, skip_special_tokens=True) for toks in new_control_toks]
+
+        print(f"MY New adv strings {new_adv_strings}")
 
         # now we filter the suffix strings which 
         valid_candidate_strings = []
@@ -383,8 +541,8 @@ class SuffixAttack:
             # should we set a size limit too?  
 
             if filter_by_size == True and len(self.tokenizer(new_adv_suffix, add_special_tokens=False).input_ids) != len(adv_suffix_token_ids):
-            # if filter_by_size == True and len(input_ids_for_this_suffix) != len(input_ids):
                 continue
+            # if filter_by_size == True and len(input_ids_for_this_suffix) != len(input_ids):
                 # print("A)")
                 # print(f"i is {i}")
                 # print(f"Length difference {len(self.tokenizer(new_adv_suffix, add_special_tokens=False).input_ids)} vs {len(adv_suffix_token_ids)}")
@@ -420,36 +578,19 @@ class SuffixAttack:
 
         assert len(valid_candidate_strings) > 0, "All candidate strings were invalid"
 
+        # print(f"10 - After filtering candidate strings {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
+
         batch_size = len(valid_candidate_strings)
-        batch = torch.full((batch_size, max_len_token_ids), self.tokenizer.pad_token_id, dtype=torch.long, device=self.device)
+        assert batch_size == self.batch_size, "Number of candidates equals the batch size"
+        batch = torch.full((batch_size, max_len_token_ids), self.tokenizer.pad_token, dtype=torch.long, device=self.device)
+        
+
+        # print(f"11 - After creating batch {torch.cuda.memory_allocated(self.device)//1024//1024} MB")
 
         # make sure that the target string is located in the same place for all candidates
         for idx, candidate_input_ids in enumerate(valid_candidate_input_ids):
             # Pad each candidate input ids from the length to match the maximum length
-            # print(f"Candidate input ids: {valid_candidate_input_ids}")
-            # print("")
             batch[idx, -len(candidate_input_ids):] = candidate_input_ids
 
         return valid_candidate_strings, batch 
 
-    def generate(self,
-                prompt: str = None,
-                max_new_tokens: int = 25,
-                generation_config: GenerationConfig = None
-    ) -> str:
-        if prompt is None:
-            prompt = f"{self.instruction} {self.adv_suffix}"
-
-        if generation_config is None:
-            generation_config = self.model.generation_config
-            generation_config.max_new_tokens = max_new_tokens
-
-        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device)
-        attn_masks = torch.ones_like(input_ids).to(self.device)
-        tokens = self.model.generate(
-            input_ids=input_ids,
-            attention_mask=torch.ones_like(input_ids).to(self.device),
-            generation_config=generation_config,
-            pad_token_id=self.tokenizer.pad_token_id
-        )[0]
-        return self.tokenizer.decode(tokens[input_ids.shape[1]:])
