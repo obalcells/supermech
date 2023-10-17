@@ -1,0 +1,392 @@
+Categorize the following type of cloud as either public, private, or hybrid.
+Analyze how artificial intelligence is implemented in the healthcare sector.
+Categorize the following question as an open-ended or closed-ended question.
+Provide the syntactic analysis of the sentence using the Penn Treebank tags.
+Describe a realistic scenario that illustrates the potential of 3D printing.
+Write a sentence about the article using two of the words from the headline.
+Explain the difference between a customer journey and a customer experience.
+Construct a sentence using complex sentences with three subordinate clauses.
+Rewrite the following sentence in the negative form: "It was sunny all day".
+Describe a scenario for a technology company to increase customer engagement
+Rewrite the following sentence changing the underlined part to passive voice
+Tell me the difference between between a high-waisted and low-waisted jeans.
+Generate two possible questions a customer might ask related to the product.
+Give a numerical rating to the following restaurant based on your experience
+Construct a Boolean expression to decide whether a number is divisible by 5.
+Generate a story with a beginning and an end around the topic of friendship.
+Reword this sentence: The desktop wallpaper of a user speaks a lot about him
+Given the following input, generate a job description for a product manager.
+Write an introduction for a blog about the importance of financial literacy.
+Generate a neural network architecture for a binary visible object detector.
+What is the purpose of using a script when developing a software application
+Explain why content optimization is important in natural language processing
+Classify these items under three categories: fruits, vegetables, and grains.
+In the following sentence, identify and explain the three figures of speech.
+Find the countries that have achieved a "Very High" human development index.
+Re-write the sentence using third-person singular form, output the sentence.
+What is the meaning of the phrase "on an even keel", output the explanation.
+Given two people and a relatable situation, compose a dialogue between them.
+Generate a creative slogan for a company that uses renewable energy sources.
+Choose the best answer to this question: What is the capital city of France?
+Come up with a new word that combines the two words ‘flavor’ and ‘satisfied’
+Write a research paper on the impact of climate change on the global economy
+Generate a sentence using the words “hospital”, “courage”, and “desperation”
+Reword the sentence “She does not like school” without using the word “like”
+Calculate the median of the following set of numbers:
+
+4, 15, 22, 32, 43, 54
+What are some social and environmental implications of fossil fuels burning?
+Generate a list of questions someone should ask before deciding on a career.
+Create a chart to compare the rising cost of medical care from 2000 to 2019.
+Rewrite this sentence to reflect the same meaning, but in the passive voice:
+Suggest three strategies that could help a company improve customer service.
+Write a classification model to determine the sentiment of a given sentence.
+Analyze the following painting and describe its elements in three sentences.
+Come up with a creative name for a website that sells eco-friendly products.
+Classify the following statement: Chocolate is the best flavor of ice cream.
+Summarize the key themes from the poem "The Road Not Taken" by Robert Frost.
+Using the given English phrase, create an appropriate and memorable hashtag.
+What is the difference between a static IP address and a dynamic IP address?
+Write a persuasive argument on why the given activity should be implemented.
+What is the third person singular in the imperative form of the verb 'play'?
+Given the following list of ingredients, make up a recipe for a fruit salad.
+Rewrite the following sentence to avoid the cliché "it goes without saying".
+Categorize the following phrase as belonging to which part of speech: "very"
+Come up with a creative metaphor that describes the condition of one's life.
+Generate a sentence using the words "incredible", "trait", and "innovative".
+Create a metaphor to describe how relationships can be a source of strength.
+Reorganize a given paragraph to improve its flow and make it more effective.
+Classify the following story as a fairy tale, urban legend, or horror story.
+How might someone use machine learning to assess credit scores of borrowers?
+Rank the following five cars from the most expensive to the least expensive.
+Translate the following statement in French. Output the translated sentence.
+Given the following description, provide a visual illustration of the story.
+Find a Creative Commons photo that describes the concept of hot summer days.
+Generate a list of interesting facts about the location of the Grand Canyon.
+Analyze the given text and explain how the author used rhetorical techniques
+Describe the emotion expressed in the given excerpt and output the response.
+Identify the following type of literature
+The adventures of Huckleberry Finn
+Generate a thesis statement about the effects of climate change on glaciers.
+Write a persuasive argument to convince someone that global warming is real.
+Formulate a hypothesis about the following situation: A sink is overflowing.
+Write a function that returns the codes of the characters of a given string.
+Give an example of a situation where a computer could interact with a person
+Given a word and its definition, generate a short story that uses that word.
+Come up with two creative ways to use the phrase “the cat's out of the bag”.
+What kind of historical period does the American Revolutionary War refer to?
+Explain why network security is important in the context of personal banking
+Suggest a replacement word for the italicized that better suits the context.
+Draft a response to the following message in a friendly and respectful tone.
+Based on the following comment, edit the code to achieve the desired result.
+For the given text, identify three obscure words and use them in a sentence.
+What are the some advantages of using digital technologies in the classroom?
+What are the positive and negative aspects of technology in our daily lives?
+Create a data visualization showing the number of online purchases per month
+Generate a list of 5 American cities with populations higher than 1 million.
+Write a story about a character trying to get a job in a competitive market.
+Generate a dialogue between two characters, Jack and Susan, in a restaurant.
+Reword this sentence: "My favorite movies are the Lord of the Rings trilogy"
+Compare and contrast the two different learning styles: visual and auditory.
+Given some research topic, come up with a catchy title for a research paper.
+Write a letter to your friend telling them why you decided to quit your job.
+Generate an article title that captures the essence of the following excerpt
+Create a new story that uses the following words: tulip, lighthouse, firefly
+Construct an outline for an essay about the benefits of a healthy lifestyle.
+Rewrite the sentence to make it more polite: "I need this done immediately".
+Compare and contrast two different types of facial recognition technologies.
+Add two sentences to this text to help establish a clear sequence of events.
+Create a summary of the following article that is no more than 10 sentences.
+Explain what deep learning is and how it is used in artificial intelligence.
+How would you explain artificial neural networks to a middle school student?
+For the following sentence, provide a rephrased version that is more concise
+Generate a short description about a fictional character - a space traveler.
+Identify the common theme between the following words:  Lemon, Orange, Apple
+Identify the geographical unit for the following state boundary description.
+Write an imperative sentence instructing the assistant to compare two items.
+Create a question to test the understanding of a learner on the given topic.
+Change the following sentence to the future perfect tense: "He will arrive."
+Produce an example of a metaphoric phrase which expresses the given concept.
+Organize these 10 elements of the periodic table in increasing atomic number
+Predict whether the following expression has a positive or negative meaning.
+Generate a sentence of at least 8 words which describes a task of GPT model.
+Using the following ingredients, give instructions for making banana splits.
+Given a weather forecast, list possible outdoor activities that can be done.
+Compare the following two nouns using the correct word: communicate, similar
+Traverse the following list with a for loop and print each item in the list.
+To what extent does the analysis provided by the author explain the problem?
+Describe how artificial intelligence (AI) will shape the future of medicine.
+Generate a sentence using the provided adjectives that follows this pattern:
+Compare the artistic style of Vincent Van Gogh with that of Jackson Pollock.
+Generate a story of at least 100 words that incorporates the input provided.
+Given some text and a keyword, find the synonyms of the keyword in the text.
+Please explain the concept of machine learning in an easy to understand way.
+Provide two strategies to improve customer experience in an e-commerce store
+Create a shopping list including the items that are needed for making a cake
+Provide a few examples of how the given concept is implemented in real life.
+Explain the differences between genetic engineering and traditional breeding
+What type of research question should be asked to answer the given question?
+Categorize a restaurant as either an Italian, Mexican, or Chinese restaurant
+Take the following news article and summarize it in three to five sentences.
+Edit the following sentence in the most natural way to make it active voice:
+In what ways does artificial intelligence assist people in their daily life?
+Determine which of the following sorting algorithms best suits this data set
+Reverse engineer the following object piece by piece and describe each part.
+Evaluate the accuracy of the following statement: "Money can buy happiness".
+Analyze the analogy provided and select the appropriate word to complete it.
+Write an email to the customers to inform them about the new product launch.
+Determine the stock market trend of the following stock over the past month.
+Write a short dialogue between two people who are discussing a disagreement.
+Generate a story combining the following words: lemon, whale, and butterfly.
+Write a marketing email showing the benefits of using an e-commerce platform
+Rewrite the sentence into a more concise form that conveys the same meaning.
+List four factors that influence the solubility of a substance in a solvent.
+Come up with a rule that will classify the input of x > 4 and x < 6 as true.
+Give an example of data that could be used to answer the following question.
+Given the definition of a word, create a mnemonic that helps you remember it
+Name two endangered species of plants and two endangered species of animals.
+Generate a list of appropriate titles for a book about the following topics.
+Given two sentences, identify the impact that one sentence has on the other.
+Describe the connection between environmental degradation and public health.
+Label each of the given pieces of data as either "discrete" or "continuous".
+Group the words together to form the best definition of a virtual assistant.
+Create five different questions to ask an interviewee during a job interview
+Calculate the maximum price of a product given total cost and profit margin.
+Describe the features and benefits of a computerized decision support system
+Given information about a person, generate a short profile about the person.
+Given a list of ingredients, suggest one or more ways to use them in a dish.
+Explain why science fiction is a genre of literature that is relevant today.
+Create a matching game where animals have to be matched with their habitats.
+What is the predicted price of a car manufactured in 2009 and with 75,000 km
+Research the regulations for motor vehicle emission standards in California.
+Identify three difficulties faced by advertisers in the 2008 election cycle.
+Classification Task: Given the following text, what topic does it belong to?
+Analyze the following sentences and identify  the subject and the predicate.
+Provide two examples that demonstrate the concept of cultural appropriation.
+How would you use data analytics to detect errors in financial transactions?
+Create a list of five rules that should be followed when using social media.
+Generate a sentence that describes how technology has changed everyday life.
+You are given two sentences, you need to find the similar words between them
+Provide the correct verb conjugation for the following sentences: 
+I (write)
+Translate the following sentence into Japanese: I like the color of the sky.
+Describe ways in which artificial intelligence could be used to help people.
+Create a personality profile for the character in the following description.
+Create a real-world situation with the words "pie", "notebook", and "penny".
+Design a PowerPoint presentation about the benefits of a Mediterranean diet.
+Generate a list of 3 possible research topics related to GPT language models
+What is the volume of a rectangular prism with dimensions 3, 4 and 5 meters?
+Compare the two given products and provide the advantages and disadvantages.
+Translate the following sentence to French: "I need to go grocery shopping".
+Determine the type of triangle based on the following angles: 30°, 60°, 90°.
+Construct a SQL query to identify the top 5 users with the most transactions
+Analyze the given sentence and use the findings to construct a new sentence.
+Based on the following recipe, what are the ingredients needed for the dish?
+Generate a tweet of at most 140 characters using the phrase "Don't give up".
+Utilize the given values to differentiate between the two given populations.
+After watching the movie Titanic, compose a reflective essay about the film.
+Provide an example of a piece of software with machine learning capabilities
+Classify the following sentence has having a positive or negative sentiment.
+Construct a sentence to explain why a person should learn a second language.
+Generate an example of what a resume should like for a culinary professional
+Explain the concept of a bubble sort algorithm to a non-technical audience.
+Given the following input, classify the verb as transitive or intransitive.
+Generate a headline for a news article about the rising cost of healthcare.
+Create a persona for a fictional e-commerce store selling sports equipment.
+Change the given sentence into a statement about the benefits of something.
+Compile a list of ethical considerations for the development of AI systems.
+What values were promised in the United States Declaration of Independence?
+Write a five-word sentence using the words "happy", "content", and "dream".
+Explain the difference between artificial intelligence and machine learning
+Create a product description and list at least two features of the product.
+Write a story that includes the following words: vase, lighthouse, sparrow.
+Edit the following sentence to correct any spelling/grammar/style mistakes:
+Generate a children's story that includes the character of a friendly lion.
+Given two countries, develop a comparison between their healthcare systems.
+List five adjectives to describe a person with strong communication skills.
+Generate a title for an article about why children should learn meditation.
+Edit the given sentence by replacing the verb with a more appropriate verb.
+Calculate the area of a triangle with a base 6 inches and a height 4 inches
+Name 10 professions and explain how deep learning can be beneficial to them
+Given a list of numbers, subtract the smallest number from the largest one.
+Create a program to detect and remove duplicate words from a given sentence
+Consider the given input and come up with a marketing plan for the product.
+Generate a story about a college student that is moving out for the summer.
+Create a SQL query to display all the fields in a table called "employees".
+Generate a conversation between two people discussing a current news topic.
+Classify the given sentence as either a statement, a question or a command.
+I want to make a food dish for four people. Create the list of ingredients.
+Based on the given facts, create a resume for an applicant in 50-100 words.
+Describe the disadvantages of using commercial facial recognition software.
+Create a text output based on the information given using the given format.
+Calculate the area of a triangle with side lengths of 3 cm, 4 cm, and 5 cm.
+Identify the dependent and independent variables in the following equation:
+Create a new headline that summarizes the content of the following article.
+Create an entertaining quiz to help people learn more about local wildlife.
+Calculate the midpoint of the line segment connecting (9, -7) to (-13, -2).
+Construct an SQL table with the following columns: _id, name, phone, email.
+Generate an intriguing headline for a blog post on artificial intelligence.
+Explain why the moon appears bigger on the horizon than it does in the sky.
+How would you modify the given sentence so that it has a different meaning?
+Translate the sentence "Dónde está la estación de autobuses?" into English.
+Write the name of a city in the United States starting with the letter "D".
+Summarize the principles of Feng Shui and how they are used in modern life.
+Develop a conversation between two people about the novel they are reading.
+Compare and contrast the two systems of government: democracy and communism
+Classify the sentiment (positive, neutral, negative) of the following text.
+Predict what would happen if two different chemical compounds are combined.
+Is this technology more suitable for large enterprises or small businesses?
+Edit the following sentence so it has no grammatical or punctuation errors.
+Congolese culture is heavily influenced by which antropological phenomenon?
+Write a story about two friends trying to achieve a difficult task together
+Recommend a suitable language model for a task that performs summarization.
+Generate a poetic output of 10 lines using the title and themes you choose.
+Write pseudocode for a program that reads two numbers and prints their sum.
+Put together a list of necessary ingredients for a Pizza Margherita recipe.
+Read the following and come up with a list of adjectives related to sports.
+Given a sentence, use at least five adjectives in a sentence to describe it
+Construct an English sentence containing the words "tangible" and "matter".
+Compare and contrast two web hosting providers and suggest the best option.
+I have a 3-year-old daughter - can you suggest a good book for her to read?
+Describe a significant event in British History and explain its importance.
+What kind of activities do employees engage in to stay creative on the job?
+Format the following sentence by adding quotation marks wherever necessary.
+Create a compelling argument to support the importance of art in education.
+Imagine you are designing a game. What is the best way to motivate players?
+Construct a Big-O notation to explain the complexity of a certain algorithm
+Create a list of tasks a Virtual Assistant would do for a research analyst.
+Describe how the internet can be used to increase efficiency in a business.
+Explain the concept of a “pooling layer” in a Convolutional Neural Network.
+Describe the mood or ulterior motive of the character in the given excerpt.
+Classify the following movie as either a horror movie or a romantic comedy.
+Which driver is best for solving the given problem? Output A, B, C, D or E.
+Tell me the name, release date, and director of the latest Spiderman movie.
+Design a costume for a superhero character that fits the description below.
+Describe the benefits of using a blog as a platform for publishing content.
+Name the software engineering design pattern and give the definition of it.
+Suggest a different word for the following phrase: "attractive appearance".
+Create a list of six important topics that should be discussed in a meeting
+Describe a situation where body language can help facilitate understanding.
+Create a sentence that uses a metaphor to describe the beauty of a sunrise.
+Propose a solution to the problem of homeless people living on the streets.
+Outline the possible access control policies for a cloud-based application.
+Generate a suitable title for a short story involving an alien and a robot.
+Add two adjectives to this sentence: "The _____ _____  cat purred quietly."
+Rewrite this sentence to make it more effective: The vehicle must be moved.
+Generate a query to find all customers who have made more than 50 purchases
+Calculate the surface area of a cone with a radius of 5 and a height of 10.
+Create a bar chart to show the correlation between age and education level.
+Find the typo in the following sentence and rewrite the sentence correctly.
+Create a research topic related to the effect of social media on teenagers.
+Edit the following sentence so that it is in the third person point of view
+Write a JavaScript program to remove all duplicated elements from an array.
+Analyze the following line of dialogue and explain the character’s motives.
+Come up with a list of five questions to answer in a self-reflection essay.
+What are the benefits of using artificial intelligence for market analysis?
+Would you be able to suggest a few tips to optimize website loading speeds?
+Give an example of a widely used service that uses implicit authentication.
+Identify an interesting topic that has been discussed recently in politics.
+Given two sentences, rewrite them using the same ideas but different words.
+Change this sentence to the active voice: "The ball was caught by the boy."
+Compare and contrast natural language processing (NLP) and computer vision.
+Given a set of numbers, list all possible three-step arithmetic operations.
+Given the following code, how many times will the code print "Hello World"?
+Calculate the net force on an object of given mass at a given acceleration.
+For what kind of activity is the soundtrack of "Beauty and the Beast" used?
+Given the coordinates of 3 points, determine if they form a right triangle.
+Suggest one word that would make the following sentence sound more natural.
+Rewrite the following sentence using different words and grammar structure.
+Identify two areas where data science can be used to improve public health.
+Classify the following sentence as expressing sadness, joy, anger, or fear.
+Analyse this hypothesis: Increased government spending will reduce poverty.
+Name three factors that influence the development of a healthy personality.
+Develop a survey question to find out the favorite color of your customers.
+Compare and contrast the strengths and weaknesses of wind and solar energy.
+Design an algorithm to predict the stock market using the given conditions.
+Delete the sentences which have incorrect grammar in the following passage.
+Compare and contrast the properties of two elements from the periodic table
+Summarize the recent news article "The latest on AI" in less than 50 words.
+Write down three questions to ask a potential employee during an interview.
+Generate questions to ask a museum curator about the history of the museum.
+Take a complicated theory or concept, and explain it as simply as possible.
+List the five most important features of a customer service representative.
+Draft 5 questions discussing the pros and cons of the US healthcare system.
+For the equation 3x2 + 2x + 5 = 0, use the quadratic formula to solve for x
+What is the main difference between the words 'identity' and 'personality'?
+Edit the following message so it is suitable for a formal work environment.
+Given a list of candidates, create a rating system to score the applicants.
+Rewrite the following paragraph, changing the tone from formal to informal.
+On a scale of 0-5, rate the historical accuracy of the movie The Godfather.
+Create a list of the differences between quantitative and qualitative data.
+Name one advantage that artificial intelligence brings to the medical field
+Create a 4-sentence synopsis that summarizes the content of the given text.
+Write 3 questions that a student can ask their teacher about a given topic.
+Suggest a legendary superhero and explain why they are considered legendary
+Imagine you are a doctor. Create a health plan for a patient with diabetes.
+Describe the type of data that is most suitable for using machine learning.
+Please provide an example of how a company could use customer segmentation.
+Explain the difference between a competitive and non-competitive inhibitor.
+Outline how new AI-driven projects can be tested for inappropriate content.
+Create a Google calendar entry to remind the user to complete a given task.
+Generate a source code comment that describes what the following code does.
+Look at this car photo and describe to me in 2-3 sentences what it is like.
+Write a blog post advocating for teaching students coding skills in school.
+Given the input scenario below, suggest a way for the protagonist to escape
+Write potential job opportunity titles for a professor of language studies.
+Estimate the cost of replacing a roof on a 1500 square foot ordinary house.
+Generate an example of a school report card, including grades and comments.
+What is the cultural meaning behind the expression "raining cats and dogs"?
+Generate a list of 20 interesting topic ideas for a blog post on parenting.
+Determine how many people would attend a meeting given the invitation list.
+Generate a list of names for a fantasy novel set in a medieval-style world.
+Generate a 3-4 sentence story about a person receiving an unexpected award.
+Translate the following sentence to Spanish: The cat is sleeping on the bed
+Construct a set of five multiplication equations that use the same factors.
+Assume you are a farmer. Summarize the benefits of planting your own crops.
+Assume you are a researcher. Explain the importance of conducting a survey.
+Name two types of air pollution and describe how each affects human health.
+Edit the following sentence so that it follows the grammatical conventions.
+Construct a dialogue between two characters on the topic of global warming.
+Analyze the relationship between the two characters in the following scene.
+Convert this sentence into the past continuous tense: We are playing soccer
+Classify this sentence into indicative, optative, imperative or exclamative
+Choose the most appropriate vocabulary word to complete the given sentence.
+What are three skills that an employee should possess for a managerial job?
+Summarize the following article, highlight all major points in the summary.
+Gather relevant statistics about the impact of traffic pollution on health.
+Generate a haiku poem that uses the words 'sky', 'mountain', and 'evening'.
+Write an example of a problem statement for a software engineering project.
+Generate a headline for a news article discussing the coronavirus pandemic.
+Given the company itself, compare and contrast its strengths and weaknesses
+Given a list of sports and equipment required, develop a new game or sport.
+List three ways in which technology has transformed the field of education.
+Write a essay in 500 words, presenting your opinion on the following topic.
+Rewrite the sentence to make it shorter and still conveys the same meaning.
+Write a Java program to print out the lyrics for the song "Happy Birthday".
+Given a list of instructions, write a function using a programming language
+Give me 5 ideas to enhance customer experience while booking an air ticket.
+Create a rhetorical question to encourage discussion about the given topic.
+Rewrite this sentence "I can't seem to make up my mind" in an active voice.
+Solve the following equation and explain the steps used to find the answer.
+Write a one-sentence explanation for the following phrase: "Zero-sum game".
+Write a sequence of characters that contain 8 characters and ends with "z".
+Write a Python function to generate the Fibonacci sequence up to n numbers.
+Edit the following text to make sure that all words are in the plural form.
+Describe a possible career path for someone interested in Machine Learning.
+Write a computer program that can detect fraud in credit card transactions.
+Identify the independent and dependent variable in the provided experiment.
+Generate the names of four different fruits that start with the letter "P".
+Answer the following question: What is the maximum speed limit in Arkansas?
+Summarize the article "This Is Why Women Are Choosing Not to Have Children"
+Rewrite the following sentence: "I am not happy with how my life is going."
+Compare and contrast the political systems of the United States and Canada.
+Construct a quiz question designed to test knowledge of the US Constitution
+List four of the offenses that are considered a felony in the United States
+Identify the main theme of the following poem and provide a brief analysis.
+Generate a single sentence that summarizes the effects of the given policy.
+Explain the relation between input and output using mathematical equations.
+Compare and contrast the benefits and drawbacks of artificial intelligence.
+Write a JavaScript function for changing the background color of a website.
+Create five original multiple choice options given the following statement.
+Compose a tweet about the given topic in an informative and concise manner.
+Edit the following sentence to make it more formal: "I'm really busy today"

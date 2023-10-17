@@ -1,20 +1,5 @@
 
 
-def get_model():
-	model = HookedTransformer.from_pretrained(...)
-    # change some settings about the model
-    ...
-    return model
-
-def get_validation_data():
-    return ...
-
-def get_metric():
-    return kl_divergence
-
-
-
-
 class TLACDCCorrespondence:
     # store the full computational graph
     

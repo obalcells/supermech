@@ -477,16 +477,3 @@ def plot_top_k_tokens(tokens: List[str], logits: List[Float], topk=10):
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
-# used for Llama2
-def plot_all_activations(layers):
-    if not os.path.exists("clustering"):
-        os.mkdir("clustering")
-    for layer in layers:
-        pos = torch.load(f"positive_layer_{layer}.pt")
-        neg = torch.load(f"negative_layer_{layer}.pt")
-        save_activation_projection_tsne(
-            pos,
-            neg,
-            f"clustering/activations_layer_{layer}.png",
-            f"t-SNE projected activations layer {layer}",
-        )
