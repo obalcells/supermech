@@ -4,7 +4,7 @@ temp/
 *.egg-info/
 .DS_Store
 .html
-miexperiments/models
-miexperiments/causal-checker
-miexperiments/Mech-Interp-Challenges
-miexperiments/arena-hackathon-attribution-patching
+supermech/models
+supermech/causal-checker
+supermech/Mech-Interp-Challenges
+supermech/arena-hackathon-attribution-patching
