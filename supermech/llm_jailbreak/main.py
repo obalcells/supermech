@@ -7,13 +7,14 @@ from supermech.llm_jailbreak.suffix_attack import *
 from supermech.llm_jailbreak.new_suffix_attack import NewSuffixAttack 
 # from supermech.act_engineering import ActivationVectors 
 
-np.random.seed(0)
-torch.manual_seed(0)
-torch.cuda.manual_seed_all(0)
-model_path = "meta-llama/Llama-2-7b-chat-hf"
 
 def main():
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+    model_path = "meta-llama/Llama-2-7b-chat-hf"
     device = 'cuda:0'
+
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         use_auth_token=os.environ["HUGGINGFACE_TOKEN"],
@@ -44,9 +45,11 @@ def main():
     # we add the dot product with the refusal vector to the loss
     # layers = act_vectors.refusal_vector_layers
     # refusal_vectors = act_vectors.resid_stream_refusal_vectors # <- dict
-    # for layer in layers:
-    #     llama_wrapper.set_calc_dot_product_with(layer, refusal_vectors[layer].to(llama_wrapper.device).type(torch.float16))
-    # activation_loss_fn = lambda _: (1 / len(layers)) * sum([llama_wrapper.model.layers[layer].dot_products[-1] for layer in layers])
+    layers = list(range(0, 32))
+    harm_vectors = torch.load("../act_engineering/harm_vector_2/harm_vector_2.pt")
+    for layer in layers:
+        llama_wrapper.set_calc_dot_product_with(layer, harm_vectors[layer].to(llama_wrapper.device).type(torch.float16))
+    activation_loss_fn = lambda _: (1 / len(layers)) * sum([llama_wrapper.model.layers[layer].dot_products[-1] for layer in layers])
 
     # Code to use the goals and targets in advbench
     # train_goals, train_targets, test_goals, test_targets = get_goals_and_targets(
@@ -72,10 +75,10 @@ def main():
         jailbreak_db_path="./jailbreak_db.json",
         control_init=control_init,
         progressive_goals=True,
+        activation_loss_fn=activation_loss_fn
     )
 
-    log_path = attack.log_path
-    print(f"Log path is {log_path}")
+    print(f"Log path is {attack.log_path}")
 
     control_str, best_control_str, loss, steps = attack.run(
         n_steps=n_steps,
@@ -88,6 +91,7 @@ def main():
         allow_non_ascii=False
     )
 
+    print(f"Logs at {attack.log_path}")
     print(f"Best control str {best_control_str}")
     print(f"Last control str {control_str}")
     print(f"Last loss {loss}")

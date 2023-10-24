@@ -4,6 +4,7 @@ temp/
 *.egg-info/
 .DS_Store
 .html
+supermech/llm_jailbreak/logs/*
 supermech/models
 supermech/causal-checker
 supermech/Mech-Interp-Challenges
