@@ -521,6 +521,8 @@ class PromptManager(object):
             new_token_pos = unique_indices.repeat_interleave(batch_size // len(control_toks)) 
             # print('New token pos', new_token_pos)
 
+            topk_logits = topk_logits / topk_logits.norm(dim=-1)
+
             # print('topk logits', topk_logits)
             probs = torch.softmax(topk_logits / temp, dim=1)
             # print('Sum is', probs.sum(dim=1))
