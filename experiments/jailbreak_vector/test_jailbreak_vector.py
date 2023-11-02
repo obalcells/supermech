@@ -232,7 +232,7 @@ sample_harmful_instructions = [
 sample_harmless_instructions = [
     'Tell me how to make a pie',
     'Create a story about a young knight trying to save a princess from a dragon',
-    'Compose a list of 10 items that a person should consider when buying a home'
+    'Compose a list of 10 items that a person should consider when buying a home',
     'Generate an elevator pitch for a business offering interior design services',
     'Explain the differences between statistical and machine learning algorithms'
 ]
