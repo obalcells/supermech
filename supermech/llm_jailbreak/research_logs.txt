@@ -1,0 +1,3 @@
+Act loss for harmless instruction: 27.484375
+Act loss for harmful instruction: 33.03125
+

@@ -8,6 +8,31 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.ticker import ScalarFormatter
 
+def print_tokens(tokens: Int[Tensor, "seq_len"], tokenizer):
+    if len(tokens.shape) == 2:
+        # remove the batch dimension if present
+        tokens = tokens[0]
+    print([tokenizer.decode(tok) for tok in tokens])
+
+# projects activations into direction
+def project_onto_direction(activations: Float[Tensor, "n d_model"], direction: Float[Tensor, "d_model"]):
+    mag = torch.norm(direction)
+    assert not torch.isinf(mag), "The magnitude of the direction vector should not be infinity"
+
+    # Project each vector in H onto the direction
+    # Note: Here we assume H is a 2-D tensor where each row is a vector
+    # that needs to be projected onto the direction.
+    # The unsqueeze operation is necessary to align the dimensions for broadcasting
+    # during the dot product.
+    projection = torch.matmul(activations, direction.unsqueeze(1)) / mag
+
+    # The result will be a column tensor with the projection scalars.
+    # If you want the projection result in the direction of the vector,
+    # you need to multiply by the unit vector in the direction of 'direction'.
+    unit_direction = direction / mag
+    projection_as_vectors = projection * unit_direction.unsqueeze(0)
+    
+    return projection_as_vectors
 
 def add_vector_after_position(matrix, vector, position_ids, after=None):
     after_id = after
@@ -67,6 +92,9 @@ class BlockOutputWrapper(torch.nn.Module):
         self.add_activations = None
         self.after_position = -1 
 
+        self.optimize_activations = False
+        self.activations_callback = None 
+
         self.calc_dot_product = False
         self.save_activations = False
         self.save_internal_decodings = False
@@ -77,6 +105,9 @@ class BlockOutputWrapper(torch.nn.Module):
     def forward(self, *args, **kwargs):
         output = self.block(*args, **kwargs)
         activations: Float[Tensor, "batch_size seq_len d_model"] = output[0]
+
+        if self.activations_callback is not None:
+            self.activations_callback(activations)
 
         if self.calc_dot_product == True and self.calc_dot_product_with is not None:
             # last_token_activations = self.activations[0, -1, :]
@@ -98,23 +129,58 @@ class BlockOutputWrapper(torch.nn.Module):
             # print(f"Dot products across all tokens: {dot_products_across_all_tokens}")
             # print(f"Printing tensor of shape {dot_products_avg_all_tokens.shape}")
             # pretty_tensor(dot_products_avg_all_tokens)
+
+            # cosim: Float[Tensor, "batch_size"] = einops.einsum(
+            #     last_token_activations / last_token_activations.norm(dim=-1, keepdim=True),
+            #     self.calc_dot_product_with,
+            #     "batch_size d_model, d_model -> batch_size"
+            # )
+
+            multiplier = 1.0
+            normalize = True
+
             last_token_activations = activations[:, self.after_position, :]
-            dot_product: Float[Tensor, "batch_size"] = einops.einsum(
-                last_token_activations, self.calc_dot_product_with,
-                "batch_size d_model, d_model -> batch_size"
-            )
-            # divide by the number of tokens if we compute across more than one token
-            # dot_product /= 1 
-            self.dot_products.append(dot_product)
+            norm_pre = torch.norm(last_token_activations, dim=-1, keepdim=True)
+            target_activations = last_token_activations + self.calc_dot_product_with * multiplier
+            if normalize:
+                norm_post = torch.norm(target_activations, dim=-1, keepdim=True)
+                target_activations = target_activations / norm_post * norm_pre
+            l2_norm = torch.norm(last_token_activations - target_activations, p=2)
+
+            self.dot_products.append(l2_norm)
+
         if self.add_activations is not None:
-            print(f"Adding activations")
-            augmented_output = add_vector_after_position(
-                matrix=output[0],
-                vector=self.add_activations,
-                position_ids=kwargs["position_ids"],
-                after=self.after_position,
-            )
-            output = (augmented_output + self.add_activations,) + output[1:]
+            # ADDSPOT
+            # print(f"Position ids are {kwargs['position_ids']}")
+            # print(f"After position is {self.after_position}")
+            # print(f"Activations shape is {activations.shape}")
+            normalize = True
+
+            # Approach 1)
+            norm_pre = activations[:, self.after_position, :].norm(dim=-1, keepdim=True)
+            activations[:,self.after_position:,:] = activations[:,self.after_position:,:] + 1.0 * self.add_activations
+            norm_post = activations[:, self.after_position, :].norm(dim=-1, keepdim=True)
+            if normalize:
+                norm_post = activations[:, self.after_position, :].norm(dim=-1, keepdim=True)
+                activations[:,self.after_position:,:] = (activations[:,self.after_position:,:] / norm_post) * norm_pre
+
+            # Approach 2) Same but projecting first
+            # print(f"Approach 2")
+            # norm_pre = activations[:, self.after_position, :].norm(dim=-1, keepdim=True)
+            # proj_activations = project_onto_direction(activations[:, self.after_position, :], self.add_activations)
+            # activations[:,self.after_position:,:] -= proj_activations
+            # activations[:,self.after_position:,:] = activations[:,self.after_position:,:] + 1.0 * self.add_activations
+            # if normalize:
+            #     norm_post = activations[:, self.after_position, :].norm(dim=-1, keepdim=True)
+            #     activations[:,self.after_position:,:] = (activations[:,self.after_position:,:] / norm_post) * norm_pre
+
+            # augmented_output = add_vector_after_position(
+            #     matrix=activations,
+            #     vector=self.add_activations,
+            #     position_ids=kwargs["position_ids"],
+            #     after=self.after_position,
+            # )
+            # output = (augmented_output + self.add_activations,) + output[1:]
 
         if self.save_activations:
             self.activations = output[0] 
@@ -139,6 +205,9 @@ class BlockOutputWrapper(torch.nn.Module):
 
         return output
 
+    def set_activations_callback(callback):
+        self.activations_callback = callback
+
     def add(self, activations):
         self.add_activations = activations
 
@@ -149,6 +218,7 @@ class BlockOutputWrapper(torch.nn.Module):
         self.block.self_attn.activations = None
         self.after_position = -1 
         self.dot_products = []
+        self.activations_callback = None
 
 # Wrapper around the model to keep our stub class clean
 class Llama2Wrapper:
@@ -156,12 +226,9 @@ class Llama2Wrapper:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Model device is {self.device}")
         self.system_prompt = system_prompt
-        # the model and tokenizers are passed as arguments
-        # self.wrapped_model, self.tokenizer = Llama7BChatHelper.get_llama_model_and_tokenizer()
         self.wrapped_model = model
         self.tokenizer = tokenizer
         # the model is compiled to run on the GPU already
-        # self.wrapped_model = self.wrapped_model.to(self.device)
         self.END_STR = torch.tensor(self.tokenizer.encode("[/INST]")[1:]).to(
             self.device
         )
@@ -194,37 +261,50 @@ class Llama2Wrapper:
         for layer in self.wrapped_model.model.layers:
             layer.after_position = pos
 
-    """ How a prompt+response looks like:
-    [INST] <<SYS>>\nYou are a helpful assistant\n<</SYS>>\n\nHello, World! [\INST] Hello there!
-    """
-    def prompt_to_tokens(self, instruction, model_output=""):
+    def set_activations_callback(self, layer, callback):
+        self.wrapped_model.model.layers[layer].activations_callback = callback
+
+    def prompt_to_tokens(
+        self,
+        instruction,
+        model_output="",
+        append_space_after_instruction=True,
+        skip_sys_tags=True,
+        batch_dim=True
+    ) -> Int[Tensor, "batch_size seq_len"]:
+
         B_INST, E_INST = "[INST]", "[/INST]"
         B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-        dialog_content = B_SYS + self.system_prompt + E_SYS + instruction.strip()
-        if len(model_output) > 0:
-            dialog_tokens = self.tokenizer.encode(
-                f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
-            )
-        else:
-            dialog_tokens = self.tokenizer.encode(
-                f"{B_INST} {dialog_content.strip()} {E_INST}"
-            )
-        
-        return torch.tensor(dialog_tokens).unsqueeze(0)
 
-    def generate_text(self, prompt, max_new_tokens=16) -> str:
+        if len(self.system_prompt) == 0 and skip_sys_tags:
+            # if there's no system prompt we don't add the <<SYS>> tags inside the instruction
+            dialog_content = instruction.strip()
+        else:
+            dialog_content = B_SYS + self.system_prompt + E_SYS + instruction.strip()
+
+        if len(model_output) == 0 and not append_space_after_instruction:
+            prompt = f"{B_INST} {dialog_content.strip()} {E_INST}" 
+        else:
+            prompt = f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
+
+        if batch_dim:
+            return self.tokenizer.encode(prompt, return_tensors="pt")
+        else:
+            return self.tokenizer.encode(prompt, return_tensors="pt")[0]
+
+    def generate_text(self, prompt, max_new_tokens=16, **kwargs) -> str:
         input_ids = self.prompt_to_tokens(prompt).to(self.device)
-        output_ids = self.generate(
-            input_ids=input_ids,
-            max_new_tokens=max_new_tokens,
-            top_k=1
-        )
+        print(f"Printing tokens inside the `generate_text` function:")
+        print_tokens(input_ids[0], self.tokenizer)
+        output_ids = self.generate(input_ids=input_ids, max_new_tokens=max_new_tokens, **kwargs)
         return self.tokenizer.batch_decode(output_ids)[0]
 
     def generate(self, *args, **kwargs):
-        # assert not (input_ids is None), "Must pass input_ids to generate function as a positional argument"
-        # instr_pos = find_instruction_end_postion(input_ids[0], self.END_STR)
-        # self.set_after_positions(instr_pos)
+        assert not (kwargs.get("input_ids") is None), "Must pass input_ids to generate function as a positional argument"
+        instr_pos = find_instruction_end_postion(kwargs.get("input_ids")[0], self.END_STR)
+        instr_pos -= 4 
+        print("Instr pos is ", instr_pos)
+        self.set_after_positions(instr_pos)
         return self.wrapped_model.generate(*args, **kwargs)
 
     def get_logits(self, tokens):
@@ -362,9 +442,18 @@ class Llama2Wrapper:
     def get_prompt_with_system(self, instruction, model_output="") -> str:
         B_INST, E_INST = "[INST]", "[/INST]"
         B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-        dialog_content = B_SYS + self.system_prompt + E_SYS + instruction.strip()
-        return f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
 
+        if self.system_prompt is None or len(self.system_prompt) == 0:
+            dialog_content = instruction.strip()
+        else:
+            dialog_content = B_SYS + self.system_prompt + E_SYS + instruction.strip()
+
+        if len(model_output) > 0:
+            dialog_conent = f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
+        else:
+            dialog_content = f"{B_INST} {dialog_content.strip()} {E_INST}"
+
+        return dialog_content
 
     def tokenize_and_batch(self, prompts, batch_size=512):
         prompts_with_system = [self.get_prompt_with_system(prompt) for prompt in prompts]
