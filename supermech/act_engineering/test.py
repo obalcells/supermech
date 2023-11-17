@@ -141,7 +141,7 @@ stub = Stub(name="llama2-test-steering", image=image)
 
 @stub.cls(gpu=gpu.A100(), secret=Secret.from_name("huggingface"))
 class Benchmark:
-    def __init__(self):
+    def __enter__(self):
         import torch
         from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizerFast
 
@@ -155,13 +155,13 @@ class Benchmark:
         self.tokenizer.pad_token = self.tokenizer.unk_token
         self.tokenizer.padding_side = 'left'
 
-        self.fast_tokenizer = LlamaTokenizerFast.from_pretrained(
-            "huggyllama/llama-7b",
-            truncation_side="left",
-            use_auth_token=os.environ["HUGGINGFACE_TOKEN"]
-        )
+        # self.fast_tokenizer = LlamaTokenizerFast.from_pretrained(
+        #     "huggyllama/llama-7b",
+        #     truncation_side="left",
+        #     use_auth_token=os.environ["HUGGINGFACE_TOKEN"]
+        # )
 
-        self.fast_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+        # self.fast_tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
         self.hf_model = AutoModelForCausalLM.from_pretrained(
             HF_MODEL_DIR,
@@ -345,7 +345,7 @@ class Benchmark:
         # otherwise it takes too long to tokenize everything at once
         for seq_index in tqdm(range(0, len(text), seq_stride)):
             seq_index_end = min(seq_index + seq_stride, len(text))
-            encodings = self.fast_tokenizer("\n\n".join(text[seq_index:seq_index_end]), return_tensors="pt")
+            encodings = self.tokenizer("\n\n".join(text[seq_index:seq_index_end]), return_tensors="pt")
             text_len = encodings.input_ids.size(1)
 
             for i in range(0, text_len, batch_size * stride):
@@ -441,7 +441,8 @@ class ModuleWrapper(torch.nn.Module):
  
         self.do_steering = False
         self.steering_vector = None
-        self.prompt_steering_positions = [-2, -1] # we only add the steering vector at the last 2 positions
+        # we only add the steering vector at the last 3 positions
+        self.prompt_steering_positions = [-3, -2, -1]
         self.steer_at_generation_tokens = True
 
         self.normalize = True
@@ -528,9 +529,12 @@ class ModelWrapper:
 @stub.local_entrypoint()
 def run_benchmark():
     benchmark = Benchmark()
-    model_wrapper = ModelWrapper()
+    model_wrapper = ModelWrapper() # <- local
  
-   benchmark_output = benchmark.perplexity.remote(model_wrapper, data="openwebtext10k")
+    benchmark_output = benchmark.generation.remote(model_wrapper, data="advbench")
 
     print("Benchmark output:")
     print(benchmark_output)
+
+    with open("benchmark_output.json", "w") as f:
+        json.dump(benchmark_output, f, indent=4)
